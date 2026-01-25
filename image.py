@@ -1,0 +1,39 @@
+from google import genai
+from PIL import Image
+import os
+from io import BytesIO
+from datetime import datetime
+
+api_key = os.environ.get("GOOGLE_API_KEY")
+if not api_key:
+    raise RuntimeError("GOOGLE_API_KEY environment variable is not set")
+
+client = genai.Client(api_key=api_key)
+
+model = "gemini-3-pro-image-preview"  # Or "gemini-3-pro-image-preview" for advanced
+
+with open("prompts.txt", "r", encoding="ascii") as f:
+    prompts_text = f.read().strip()
+
+if not prompts_text:
+    raise RuntimeError("prompts.txt is empty")
+
+prompt_blocks = [block.strip() for block in prompts_text.split("\n\n") if block.strip()]
+
+images_dir = "images"
+os.makedirs(images_dir, exist_ok=True)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+
+for prompt_index, block in enumerate(prompt_blocks, start=1):
+    prompt = " ".join(line.strip() for line in block.splitlines() if line.strip())
+    response = client.models.generate_content(model=model, contents=[prompt])
+
+    parts = response.candidates[0].content.parts if response.candidates else []
+    for i, part in enumerate(parts):
+        if getattr(part, "inline_data", None):
+            img_bytes = part.inline_data.data
+            img = Image.open(BytesIO(img_bytes))
+            filename = f"gemini_image_{prompt_index}_{i+1}_{timestamp}.png"
+            output_path = os.path.join(images_dir, filename)
+            img.save(output_path)
+            print(f"Saved {output_path}")
